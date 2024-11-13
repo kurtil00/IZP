@@ -23,7 +23,7 @@ void print_array(intPole *array){
 
 
 intPole create_array(int size){
-    intPole array = malloc(sizeof(intPole)); //PD
+    intPole array;
     array.array = malloc(size);
     array.length = size;
     array.used_size = 0;
@@ -31,40 +31,19 @@ intPole create_array(int size){
 }
 
 void free_array(intPole *array){
-    if(&array->array != NULL){
-        free(array); //problemovy radek
-        array->array = NULL;
-    }
-    else printf("chyba??");
+    free(array->array); //problemovy radek
+    array->array = NULL;
 }
 
-// void add_item(intPole *array, int item){
-//     if(array->length == array->used_size){
-//         array->array = realloc(array->array, array->length*2*sizeof(int));
-//         array->length *= 2;
-//     }
-
-//     array->array[array->used_size] = item;
-//     array->used_size += 1;
-// }
-
-int add_item(intPole* array, int item) { //PD
-    // Skontroluje, či je pole plné
-    if (array->used_size == array->length) {
-        // Zdvojnásobí kapacitu poľa
-        int* new_items = (int*)realloc(array->array, array->length * 2 * sizeof(int));
-        if (new_items == NULL) {
-            return 0; // Ak alokácia zlyhá, vráti 0
-        }
-        array->array = new_items;
+void add_item(intPole *array, int item){
+    if(array->length == array->used_size){
         array->length *= 2;
+        array->array = realloc(array->array, array->length*sizeof(int));
     }
 
-    // Pridá novú položku do poľa
-    array->array[array->used_size++] = item;
-    return 1; // Vráti 1, ak sa položka úspešne pridá
+    array->array[array->used_size] = item;
+    array->used_size += 1;
 }
-
 
 void remove_item(intPole *array, int index){
     int count;
@@ -98,10 +77,11 @@ int main(int argc, char** argv){
 
     int i;
     for(i = 1; i < 10; i++){
-        if(!add_item(&pole, i))
-        {
-            printf("Chyba\n");
-        }
+        // if(!add_item(&pole, i))
+        // {
+        //     printf("Chyba\n");
+        // }
+        add_item(&pole, i);
     }
     print_array(&pole);
 
