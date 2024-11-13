@@ -2,52 +2,89 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-void print_array(int* array, int size, int actual){
+typedef struct intPole {
+    int* array;
+    int length;
+    int used_size;
+} intPole;
+
+
+void print_array(intPole *array){
     printf("array: {");
     int count;
-    for(count = 0; count < size; count++){
-        printf("%d", array[count]);
-        if(count < size-1){
+    for(count = 0; count < array->length; count++){
+        printf("%d", array->array[count]);
+        if(count < array->length-1){
             printf(",");
         }
     }
-    printf("} size: %d ; used: %d\n", size, actual);
+    printf("} size: %d ; used: %d\n", array->length, array->used_size);
 }
 
 
-int* create_array(int size){
-    return malloc(size);
+intPole create_array(int size){
+    intPole array = malloc(sizeof(intPole)); //PD
+    array.array = malloc(size);
+    array.length = size;
+    array.used_size = 0;
+    return array;
 }
 
-void free_array(int* array){
-    if(array!= NULL){
-        free(array);
-        array = NULL;
+void free_array(intPole *array){
+    if(&array->array != NULL){
+        free(array); //problemovy radek
+        array->array = NULL;
     }
     else printf("chyba??");
 }
 
-void add_item(int* array, int item, int* total_length, int* actual_length){
-    if(*total_length == *actual_length){
-        *total_length = *total_length * 2;
-        realloc(array, *total_length);
+// void add_item(intPole *array, int item){
+//     if(array->length == array->used_size){
+//         array->array = realloc(array->array, array->length*2*sizeof(int));
+//         array->length *= 2;
+//     }
+
+//     array->array[array->used_size] = item;
+//     array->used_size += 1;
+// }
+
+int add_item(intPole* array, int item) { //PD
+    // Skontroluje, či je pole plné
+    if (array->used_size == array->length) {
+        // Zdvojnásobí kapacitu poľa
+        int* new_items = (int*)realloc(array->array, array->length * 2 * sizeof(int));
+        if (new_items == NULL) {
+            return 0; // Ak alokácia zlyhá, vráti 0
+        }
+        array->array = new_items;
+        array->length *= 2;
     }
 
-    array[*actual_length] = item;
-    *actual_length = *actual_length + 1;
+    // Pridá novú položku do poľa
+    array->array[array->used_size++] = item;
+    return 1; // Vráti 1, ak sa položka úspešne pridá
 }
 
-void remove_item(int* array, int index, int* actual_length){
+
+void remove_item(intPole *array, int index){
     int count;
-    for(count = index; count < *actual_length-1; count++){
-        array[count] = array[count+1];
+    for(count = index; count < array->used_size-1; count++){
+        array->array[count] = array->array[count+1];
     }
+    array->used_size -= 1;
+}
+void remove_all(intPole *array){
+    int count;
+    for(count = 0; count < array->used_size-1; count++){
+        array->array[count] = 0;
+    }
+    array->used_size = 0;
 }
 
-int find_item(int* array, int item, int* actual_length){
+int find_item(intPole array, int item){
     int count;
-    for(count = 0; count < *actual_length; count++){
-        if(array[count] == item){
+    for(count = 0; count < array.used_size; count++){
+        if(array.array[count] == item){
             return count;
         }
     }
@@ -55,32 +92,24 @@ int find_item(int* array, int item, int* actual_length){
 }
 
 int main(int argc, char** argv){
-    int array_length = 3;
-    int actual_length = 0;
 
-    int* array = create_array(array_length);
-    add_item(array, 1, &array_length, &actual_length);
-    //print_array(array, array_length, actual_length);
-    add_item(array, 2, &array_length, &actual_length);
-    //print_array(array, array_length, actual_length);
-    add_item(array, 3, &array_length, &actual_length);
-    print_array(array, array_length, actual_length);
+    intPole pole;
+    pole = create_array(3);
 
-    add_item(array, 4, &array_length, &actual_length);
-    //print_array(array, array_length, actual_length);
-    add_item(array, 5, &array_length, &actual_length);
-    add_item(array, 6, &array_length, &actual_length);
-    add_item(array, 7, &array_length, &actual_length);
-    add_item(array, 8, &array_length, &actual_length);
-    print_array(array, array_length, actual_length);
+    int i;
+    for(i = 1; i < 10; i++){
+        if(!add_item(&pole, i))
+        {
+            printf("Chyba\n");
+        }
+    }
+    print_array(&pole);
 
-    remove_item(array, 2, &array_length);
-    print_array(array, array_length, actual_length);
+    remove_item(&pole, 2);
 
-    int item_index = find_item(array, 7, &actual_length);
+    int item_index = find_item(pole, 7);
     printf("\nItem_index: %d\n", item_index);
 
-    free_array(array);
-    printf("\nPointer:%p\n", array);
+    free_array(&pole);
     return 0;
 }
