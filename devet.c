@@ -135,14 +135,11 @@ void array_sort(PersonArray *a)
     if(a->len < 2)
         return;
 
-    for(int i = 1; i < a->len; i++){
-        for(int j = 0; j <= i; j++){
+    for(int i = 1; i < a->len; i++)
+        for(int j = 0; j <= i; j++)
             if(person_cmp(&a->data[i], &a->data[j]) < 0)
-                for(int k = i; k > j; k--){
+                for(int k = i; k > j; k--)
                     person_swap(&a->data[k], &a->data[k-1]);
-                }
-        }
-    }
 }
 
 void array_print(PersonArray *a)

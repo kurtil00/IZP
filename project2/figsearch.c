@@ -22,24 +22,20 @@ typedef struct {
 Image* createImage(unsigned int width, unsigned int height){
     //test for valid size >0
     if(width < 1){
-        fprintf(stderr, "Invalid width input.");
         return NULL;
     }
     if(height < 1){
-        fprintf(stderr, "Invalid height input.");
         return NULL;
     }
 
     Image* image = malloc(sizeof(Image));
     if(image == NULL){
-        fprintf(stderr, "Cannot allocate memory for image");
         return NULL;
     }
     
     //allocate memory
     int* temp = malloc(width*height*sizeof(int));
     if(temp == NULL){
-        fprintf(stderr, "Cannot allocate memory for content");
         return NULL;
     }
     //fill values to object
@@ -50,17 +46,21 @@ Image* createImage(unsigned int width, unsigned int height){
     return image;
 }
 
-bool fillImage(Image *image, FILE file){
-    return 1;
-}
-
-/**
- * @brief
- * @param image 
- * @return True if image 
- */
-bool isValidImage(Image *image){
-    return 1;
+bool fillImage(Image *image, FILE* file){
+    char readChar = 0;
+    int valueCounter = 0;
+    while(readChar != EOF){
+        readChar = fgetc(file);
+        if(readChar == '0' || readChar == '1'){
+            image->content[valueCounter] = readChar - '0';
+            valueCounter++;
+        }
+        else if(readChar == ' ' || readChar == '\n' || readChar == EOF){
+            continue;
+        }
+        else return false;
+    }
+    return true;
 }
 
 bool defineMatrix(Vector* vect, FILE* file){
@@ -71,24 +71,24 @@ bool defineMatrix(Vector* vect, FILE* file){
     while(readChar != '\n'){
         readChar = fgetc(file);
         if(readChar == EOF){
-            fprintf(stderr, "File ended early.");
             return false;
         }
         if((readChar < '0' || readChar > '9')){
             //NaN
-            if(readChar == ' ' || readChar == '\t'){
+
+            if(readChar == ' ' || readChar == '\n'){
+                if(readWidth && height > 0){
+                    break;    
+                }
                 readWidth = true;
                 continue;
             }
-            else if(readChar == '\n'){
-                break;
-            }
             else{
                 //invalid input
-                fprintf(stderr, "Non-numeric character in file");
                 return false;
             }
         }
+
         //update desired values
         if(readWidth){
             width = width * 10 + (readChar - '0');
@@ -97,33 +97,141 @@ bool defineMatrix(Vector* vect, FILE* file){
             height = height * 10 + (readChar - '0');
         }
     }
+
     if(!readWidth){
-        fprintf(stderr, "Missing width.");
         return false;
     }
-    vect->x = height;
-    vect->y = width;
+    vect->x = width;
+    vect->y = height;
     return true;
 }
 
-int* hline(Image* image){
+/**
+ * @brief Returns one numeric value from matrix
+ * @param x 0-based vertical position
+ * @param y 0-based horizontal position
+ * @param image Image to take value from
+ * @return int containing 0 or 1
+ */
+int valAt(int x, int y, Image* image){
+    return image->content[x * image->width + y];
+}
 
-    return NULL;
+int* hline(Image* image){
+    int currentMax = 0;
+    int current = 0;
+    int* vectors = malloc(4);
+    for(int fill = 0; fill < 4; fill++)
+        vectors[fill] = -1;
+    int currentPosition = 0;
+
+    for(int vert = 0; vert < image->height; vert++){
+        for(int hori = 0; hori < image->width; hori++){
+            if(valAt(vert, hori, image) == 1)
+                current++;
+            else {
+                if(currentMax < current){
+                    currentMax = current;
+                    vectors[0] = vert;
+                    vectors[1] = currentPosition;
+                    vectors[2] = vert;
+                    vectors[3] = current-1;
+                    current = 0;
+                    currentPosition = hori;
+                }
+                if(image->width - hori < currentMax){
+                    break;
+                }
+            }
+        }
+        if(currentMax < current){
+            currentMax = current;
+            vectors[0] = vert;
+            vectors[1] = currentPosition;
+            vectors[2] = vert;
+            vectors[3] = current-1;
+        }
+        current = 0;
+        currentPosition = 0;
+    }
+    return vectors;
 }
 
 int* vline(Image* image){
+    int currentMax = 0;
+    int current = 0;
+    int* vectors = malloc(4);
+    for(int fill = 0; fill < 4; fill++)
+        vectors[fill] = -1;
+    int currentPosition = 0;
 
-    return NULL;
+    int hori;
+    int vert;
+    for(hori = 0; hori < image->height; hori++){
+        for(vert = 0; vert < image->width; vert++){
+            if(valAt(vert, hori, image) == 1)
+                current++;
+            else {
+                if(currentMax < current){
+                    currentMax = current;
+                    vectors[0] = currentPosition;
+                    vectors[1] = hori;
+                    vectors[2] = current-1;
+                    vectors[3] = hori;
+                    current = 0;
+                    currentPosition = hori;
+                }
+                if(image->height - vert < currentMax){
+                    break;
+                }
+            }
+        }
+        if(currentMax < current){
+            currentMax = current;
+            vectors[0] = currentPosition;
+            vectors[1] = hori;
+            vectors[2] = current-1;
+            vectors[3] = hori;
+        }
+        current = 0;
+        currentPosition = 0;
+    }
+    return vectors;
 }
 
 int* square(Image* image){
+    int* vectors;
+    vectors[0] = -1;
+    return vectors;
+}
 
+/**
+ * @brief Returns pointer to function based on input string value
+ * @param input Character array containing function name
+ * @return Pointer to function if successful, NULL otherwise
+ */
+int* (*assignFunction(char* input))(Image*){
+    if(strcmp(input, "test") == 0){
+        //action = 0;
+    }
+    else if(strcmp(input, "hline") == 0){
+        return hline;
+    }
+    else if(strcmp(input, "vline") == 0){
+        return vline;
+    }
+    else if(strcmp(input, "square") == 0){
+        return square;
+    }
+    else{
+        return NULL;  
+    }
     return NULL;
 }
 
 int main(int argc, char** argv){
 
-    ///pointer to desired function
+    ///pointer to desired figure function
     int* (*figureFunction)(Image*);
     char* fileName = "bitmap.txt";
     
@@ -149,23 +257,11 @@ int main(int argc, char** argv){
     }
     else if(argc == 3){
         //get desired action
-        if(strcmp(argv[1], "test")){
-            //action = 0;
+        figureFunction = assignFunction(argv[1]);
+        if(figureFunction == NULL){
+            fprintf(stderr, "Invalid figure argument.");
+            return -1;
         }
-        else if(strcmp(argv[1], "hline")){
-            figureFunction = hline;
-        }
-        else if(strcmp(argv[1], "vline")){
-            figureFunction = vline;
-        }
-        else if(strcmp(argv[1], "square")){
-            figureFunction = square;
-        }
-        else{
-            fprintf(stderr, "Invalid figure argument.");  
-            return -1;  
-        }
-
         //get filename
         fileName = argv[2];
     }
@@ -187,10 +283,24 @@ int main(int argc, char** argv){
             return -1;
         }
     }
-    
-
-    printf("\n\nFilename: %s", fileName);
-    printf("\nrows;columns: %u;%u", image->height,image->width);
+    if(!fillImage(image, file)){
+        fprintf(stderr, "Error when filling bitmap.");
+        return -1;
+    }
+    //debug print image
+    {
+    printf("\n");
+    for(int i = 0; i < image->height; i++){
+        for(int j = 0; j < image->width; j++){
+            printf("%d ", image->content[i*image->width+j]);
+        }
+        printf("\n");
+    }}
+    // printf("\n\nFilename: %s", fileName);
+    printf("\n");
+    int* vectors = figureFunction(image);
+    printf("%d;%d->%d;%d", vectors[0],vectors[1],vectors[2],vectors[3]);
+    // printf("\nrows;columns: %u;%u", image->height,image->width);
     fclose(file);
     return 0;
 }
