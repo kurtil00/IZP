@@ -4,9 +4,10 @@
 #include <string.h>
 
 typedef struct {
-    int* content;
-    int width;
-    int height;
+    bool* content;
+    unsigned int width;
+    unsigned int height;
+    unsigned int size;
 } Image;
 
 typedef struct {
@@ -18,6 +19,7 @@ typedef struct {
  * @brief Creates a new Image
  * @param width The width, or rows of created matrix
  * @param height The height, or columns of created matrix
+ * @return Pointer to memory of created image
  */
 Image* createImage(unsigned int width, unsigned int height){
     //test for valid size >0
@@ -34,32 +36,39 @@ Image* createImage(unsigned int width, unsigned int height){
     }
     
     //allocate memory
-    int* temp = malloc(width*height*sizeof(int));
+    bool* temp = malloc(width*height*sizeof(bool));
     if(temp == NULL){
         return NULL;
     }
+
     //fill values to object
     image->content = temp;
     image->width = width;
     image->height = height;
+    image->size = width * height;
 
     return image;
 }
 
 bool fillImage(Image *image, FILE* file){
     char readChar = 0;
-    int valueCounter = 0;
-    while(readChar != EOF){
+    unsigned int valueCounter = 0;
+    bool whitespace = true;
+    while(readChar != EOF && valueCounter < image->size){
         readChar = fgetc(file);
-        if(readChar == '0' || readChar == '1'){
+        if((readChar == '0' || readChar == '1') && whitespace){
             image->content[valueCounter] = readChar - '0';
             valueCounter++;
+            whitespace = false;
         }
         else if(readChar == ' ' || readChar == '\n' || readChar == EOF){
+            whitespace = true;
             continue;
         }
         else return false;
     }
+    if(valueCounter < image->size)
+        return false;
     return true;
 }
 
@@ -113,95 +122,110 @@ bool defineMatrix(Vector* vect, FILE* file){
  * @param image Image to take value from
  * @return int containing 0 or 1
  */
-int valAt(int x, int y, Image* image){
+unsigned int valAt(unsigned int x, unsigned int y, Image* image){
     return image->content[x * image->width + y];
 }
 
-int* hline(Image* image){
-    int currentMax = 0;
-    int current = 0;
-    int* vectors = malloc(4);
+int* hstreak(unsigned int pos, Image* image){
+    int* vectors;//return numbers
+    if((vectors = malloc(4*sizeof(int))) == NULL)
+        return NULL;
     for(int fill = 0; fill < 4; fill++)
         vectors[fill] = -1;
-    int currentPosition = 0;
 
-    for(int vert = 0; vert < image->height; vert++){
-        for(int hori = 0; hori < image->width; hori++){
-            if(valAt(vert, hori, image) == 1)
-                current++;
-            else {
-                if(currentMax < current){
-                    currentMax = current;
-                    vectors[0] = vert;
-                    vectors[1] = currentPosition;
-                    vectors[2] = vert;
-                    vectors[3] = current-1;
-                    current = 0;
-                    currentPosition = hori;
-                }
-                if(image->width - hori < currentMax){
-                    break;
-                }
-            }
+    unsigned int current = 0;
+    unsigned int row = (pos - (pos % image->width))/image->width;
+    unsigned int cols;
+    for(cols = pos; cols < (row+1)*image->width; cols++){
+        if(image->content[cols] == 1){
+            current++;
         }
-        if(currentMax < current){
-            currentMax = current;
-            vectors[0] = vert;
-            vectors[1] = currentPosition;
-            vectors[2] = vert;
-            vectors[3] = current-1;
-        }
-        current = 0;
-        currentPosition = 0;
+        else break;
     }
+    vectors[0] = row;
+    vectors[1] = pos - row*image->width;
+    vectors[2] = row;
+    vectors[3] = vectors[1]+current-1;
+    return vectors;
+}
+
+int* vstreak(unsigned int pos, Image* image){
+    int* vectors = malloc(4*sizeof(int));//return numbers
+    if(vectors == NULL)
+        return NULL;
+    for(int fill = 0; fill < 4; fill++)
+        vectors[fill] = -1;
+
+    unsigned int current = 0;
+    unsigned int rows;
+    for(rows = pos; rows < image->size; rows+= image->width){
+        if(image->content[rows] == 1){
+            current++;
+        }
+        else break;
+    }
+    vectors[0] = (pos - (pos % image->width)) / image->width;
+    vectors[1] = (pos % image->width);
+    vectors[2] = (rows - (rows % image->width)-1) / image->width;
+    vectors[3] = (pos % image->width);
+    return vectors;
+}
+
+int* hline(Image* image){
+    int* vectors;//return numbers
+    if((vectors = malloc(4*sizeof(int))) == NULL)
+        return NULL; 
+    for(int fill = 0; fill < 4; fill++)
+        vectors[fill] = -1;
+
+    for(unsigned int pos = 0; pos < image->size; pos++){
+        int* newVectors = hstreak(pos, image);
+        if(abs(newVectors[1]-newVectors[3]) > abs(vectors[1]-vectors[3])){
+            free(vectors);
+            vectors = newVectors;
+        }
+    }
+    
     return vectors;
 }
 
 int* vline(Image* image){
-    int currentMax = 0;
-    int current = 0;
-    int* vectors = malloc(4);
+    int* vectors;//return numbers
+    if((vectors = malloc(4*sizeof(int))) == NULL)
+        return NULL;
     for(int fill = 0; fill < 4; fill++)
         vectors[fill] = -1;
-    int currentPosition = 0;
 
-    int hori;
-    int vert;
-    for(hori = 0; hori < image->height; hori++){
-        for(vert = 0; vert < image->width; vert++){
-            if(valAt(vert, hori, image) == 1)
-                current++;
-            else {
-                if(currentMax < current){
-                    currentMax = current;
-                    vectors[0] = currentPosition;
-                    vectors[1] = hori;
-                    vectors[2] = current-1;
-                    vectors[3] = hori;
-                    current = 0;
-                    currentPosition = hori;
-                }
-                if(image->height - vert < currentMax){
-                    break;
-                }
+    unsigned int cols;
+    for(cols = 0; cols < image->size; cols++){
+        if(image->content[cols] == 1){
+            int* newVectors = vstreak(cols, image);
+            if(newVectors == NULL)
+                return NULL;
+            if(abs(newVectors[0]-newVectors[2]) > abs(vectors[0]-vectors[2])){
+                free(vectors);
+                vectors = newVectors;
             }
         }
-        if(currentMax < current){
-            currentMax = current;
-            vectors[0] = currentPosition;
-            vectors[1] = hori;
-            vectors[2] = current-1;
-            vectors[3] = hori;
-        }
-        current = 0;
-        currentPosition = 0;
     }
     return vectors;
 }
 
+
+
 int* square(Image* image){
-    int* vectors;
-    vectors[0] = -1;
+    int* vectors;//return numbers
+    if((vectors = malloc(4*sizeof(int))) == NULL)
+        return NULL;
+    for(int fill = 0; fill < 4; fill++)
+        vectors[fill] = -1;
+    
+    unsigned int pos;
+    for(pos = 0; pos < image->size; pos++){
+        if(image->content[pos] == 1){
+            
+        }
+    }
     return vectors;
 }
 
@@ -290,17 +314,15 @@ int main(int argc, char** argv){
     //debug print image
     {
     printf("\n");
-    for(int i = 0; i < image->height; i++){
-        for(int j = 0; j < image->width; j++){
+    for(unsigned int i = 0; i < image->height; i++){
+        for(unsigned int j = 0; j < image->width; j++){
             printf("%d ", image->content[i*image->width+j]);
         }
         printf("\n");
     }}
-    // printf("\n\nFilename: %s", fileName);
     printf("\n");
     int* vectors = figureFunction(image);
     printf("%d;%d->%d;%d", vectors[0],vectors[1],vectors[2],vectors[3]);
-    // printf("\nrows;columns: %u;%u", image->height,image->width);
     fclose(file);
     return 0;
 }
