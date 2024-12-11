@@ -56,12 +56,15 @@ bool fillImage(Image *image, FILE* file){
     bool whitespace = true;
     while(readChar != EOF && valueCounter < image->size){
         readChar = fgetc(file);
+
         if((readChar == '0' || readChar == '1') && whitespace){
+            //read value
             image->content[valueCounter] = readChar - '0';
             valueCounter++;
             whitespace = false;
         }
-        else if(readChar == ' ' || readChar == '\n' || readChar == EOF){
+        else if(readChar == ' ' || readChar == '\n'){
+            //ignore char
             whitespace = true;
             continue;
         }
@@ -77,16 +80,13 @@ bool defineMatrix(Vector* vect, FILE* file){
     unsigned int width = 0;
     bool readWidth = false;
     char readChar = 0;
-    while(readChar != '\n'){
+    while(readChar != EOF){
         readChar = fgetc(file);
-        if(readChar == EOF){
-            return false;
-        }
         if((readChar < '0' || readChar > '9')){
             //NaN
 
             if(readChar == ' ' || readChar == '\n'){
-                if(readWidth && height > 0){
+                if(readWidth && width > 0){
                     break;    
                 }
                 readWidth = true;
@@ -115,6 +115,13 @@ bool defineMatrix(Vector* vect, FILE* file){
     return true;
 }
 
+void freeImage(Image* image){
+    free(image->content);
+    image->content = NULL;
+    free(image);
+    image = NULL;
+}
+
 /**
  * @brief Returns one numeric value from matrix
  * @param x 0-based vertical position
@@ -126,6 +133,29 @@ unsigned int valAt(unsigned int x, unsigned int y, Image* image){
     return image->content[x * image->width + y];
 }
 
+/**
+ * @brief returns vertical distance of two vectors
+ * @param vectors source two vectors as integer array
+ * @return 0-based absolute distance between the 2 vectors
+ */
+unsigned int vlength(int* vectors){
+    return abs(vectors[2] - vectors[0]);
+}
+/**
+ * @brief returns horizontal distance of two vectors
+ * @param vectors source two vectors as integer array
+ * @return 0-based absolute distance between the 2 vectors
+ */
+unsigned int hlength(int* vectors){
+    return abs(vectors[3] - vectors[1]);
+}
+
+/**
+ * @brief returns the largest horizontal sequence from given point to its right
+ * @param pos position in array to start from
+ * @param image the source image
+ * @return two sets of coordinates in one integer array
+ */
 int* hstreak(unsigned int pos, Image* image){
     int* vectors;//return numbers
     if((vectors = malloc(4*sizeof(int))) == NULL)
@@ -149,6 +179,12 @@ int* hstreak(unsigned int pos, Image* image){
     return vectors;
 }
 
+/**
+ * @brief returns the largest vertical sequence from given point to its bottom
+ * @param pos position in array to start from
+ * @param image the source image
+ * @return two sets of coordinates in one integer array
+ */
 int* vstreak(unsigned int pos, Image* image){
     int* vectors = malloc(4*sizeof(int));//return numbers
     if(vectors == NULL)
@@ -180,9 +216,15 @@ int* hline(Image* image){
 
     for(unsigned int pos = 0; pos < image->size; pos++){
         int* newVectors = hstreak(pos, image);
-        if(abs(newVectors[1]-newVectors[3]) > abs(vectors[1]-vectors[3])){
+        if(vectors[0] == -1){
             free(vectors);
             vectors = newVectors;
+            continue;
+        }
+        else if(newVectors[3]-newVectors[1] > vectors[3]-vectors[1]){
+            free(vectors);
+            vectors = newVectors;
+            pos += hlength(newVectors) -1;
         }
     }
     
@@ -196,13 +238,17 @@ int* vline(Image* image){
     for(int fill = 0; fill < 4; fill++)
         vectors[fill] = -1;
 
-    unsigned int cols;
-    for(cols = 0; cols < image->size; cols++){
-        if(image->content[cols] == 1){
-            int* newVectors = vstreak(cols, image);
+    for(unsigned int pos = 0; pos < image->size; pos++){
+        if(image->content[pos] == 1){
+            int* newVectors = vstreak(pos, image);
             if(newVectors == NULL)
                 return NULL;
-            if(abs(newVectors[0]-newVectors[2]) > abs(vectors[0]-vectors[2])){
+            if(vectors[0] == -1){
+                free(vectors);
+                vectors = newVectors;
+                continue;
+            }
+            else if(newVectors[2]-newVectors[0] > vectors[2]-vectors[0]){
                 free(vectors);
                 vectors = newVectors;
             }
@@ -210,8 +256,6 @@ int* vline(Image* image){
     }
     return vectors;
 }
-
-
 
 int* square(Image* image){
     int* vectors;//return numbers
@@ -221,9 +265,53 @@ int* square(Image* image){
         vectors[fill] = -1;
     
     unsigned int pos;
+    unsigned int wide = 0;
+    unsigned int tall = 0;
+    Vector startingPos;
+    unsigned int maxSize = 0;
+    unsigned int newSize = 0;
+    int* streakBuffer = malloc(4);
+    if(streakBuffer == NULL)
+        return NULL;
     for(pos = 0; pos < image->size; pos++){
         if(image->content[pos] == 1){
-            
+            startingPos.x = (pos - (pos % image->width))/image->width;
+            startingPos.y = pos % image->width;
+            streakBuffer = hstreak(pos, image);
+            wide = hlength(streakBuffer);
+
+            unsigned int counter;
+            unsigned int size = 0;
+            for(counter = 0; counter <= wide; counter++){
+                streakBuffer = vstreak(pos+counter, image);
+                tall = vlength(streakBuffer);
+                for(size = tall > wide ? wide : tall; size != UINT_MAX; size--){ // != UINT_MAX
+                    if(vlength(vstreak(pos+size, image)) >= size){
+                        if(hlength(hstreak(pos+size*image->width, image)) >= size){
+                            //found big
+                            counter = wide;
+                            newSize = size;
+                            size = 0;
+                            break;
+                        }
+                    }
+                }
+            }
+            if(vectors[0] == -1 && newSize == 0){
+                vectors[0] = startingPos.x;
+                vectors[1] = startingPos.y;
+                vectors[2] = startingPos.x;
+                vectors[3] = startingPos.y;
+            }
+        }
+        
+        if(maxSize < newSize){
+            //found new biggest
+            maxSize = newSize;
+            vectors[0] = startingPos.x;
+            vectors[1] = startingPos.y;
+            vectors[2] = startingPos.x + newSize;
+            vectors[3] = startingPos.y + newSize;
         }
     }
     return vectors;
@@ -235,10 +323,7 @@ int* square(Image* image){
  * @return Pointer to function if successful, NULL otherwise
  */
 int* (*assignFunction(char* input))(Image*){
-    if(strcmp(input, "test") == 0){
-        //action = 0;
-    }
-    else if(strcmp(input, "hline") == 0){
+    if(strcmp(input, "hline") == 0){
         return hline;
     }
     else if(strcmp(input, "vline") == 0){
@@ -254,11 +339,12 @@ int* (*assignFunction(char* input))(Image*){
 }
 
 int main(int argc, char** argv){
-
+    
     ///pointer to desired figure function
     int* (*figureFunction)(Image*);
-    char* fileName = "bitmap.txt";
-    
+    char* fileName;
+    bool testFlag = false;
+
     if(argc == 2){
         if(strcmp(argv[1], "--help") == 0){
             printf("Input format: \n\"./figsearch ARGUMENT FILENAME\"");
@@ -276,53 +362,68 @@ int main(int argc, char** argv){
         }
         else {
             fprintf(stderr, "Invalid argument.");
-            return -1;
+            return 1;
         }
     }
     else if(argc == 3){
         //get desired action
         figureFunction = assignFunction(argv[1]);
-        if(figureFunction == NULL){
-            fprintf(stderr, "Invalid figure argument.");
-            return -1;
+        if(strcmp(argv[1], "test") == 0){
+            testFlag = true;
+        }
+        else if(figureFunction == NULL){
+            fprintf(stderr, "Invalid first argument.");
+            return 1;
         }
         //get filename
         fileName = argv[2];
     }
     else {
         fprintf(stderr, "Invalid argument count.");
-        return -1;
+        return 1;
     }
+
     Image* image;
     FILE* file = fopen(fileName, "r");
     {
         Vector matrixSize;
         if(!defineMatrix(&matrixSize, file)){
             fprintf(stderr, "Invalid matrix definition.");
-            return -1;
+            fclose(file);
+            return 1;
         }
         image = createImage(matrixSize.x, matrixSize.y);
         if(image == NULL){
             fprintf(stderr, "Error when allocating memory.");
-            return -1;
+            fclose(file);
+            freeImage(image);  
+            return 1;
         }
     }
     if(!fillImage(image, file)){
-        fprintf(stderr, "Error when filling bitmap.");
-        return -1;
+        //Error when filling bitmap.
+        fprintf(stderr, "Invalid");
+        fclose(file);
+        freeImage(image);
+        return 1;
     }
-    //debug print image
-    {
-    printf("\n");
-    for(unsigned int i = 0; i < image->height; i++){
-        for(unsigned int j = 0; j < image->width; j++){
-            printf("%d ", image->content[i*image->width+j]);
-        }
-        printf("\n");
-    }}
-    printf("\n");
+    if(testFlag){
+        printf("Valid\n");
+        fclose(file);
+        freeImage(image);
+        return 0;
+    }
     int* vectors = figureFunction(image);
-    printf("%d;%d->%d;%d", vectors[0],vectors[1],vectors[2],vectors[3]);
+    if(vectors == NULL)
+    {
+        fprintf(stderr, "Figure search unexpectedly crashed.");
+        fclose(file);
+        freeImage(image);
+        return 1;
+    }
+    printf("%d %d %d %d", vectors[0],vectors[1],vectors[2],vectors[3]);
+    free(vectors);
     fclose(file);
+    freeImage(image);
     return 0;
 }
